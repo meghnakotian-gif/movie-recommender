@@ -4,6 +4,7 @@ const getMoviesBtn = document.getElementById('get-movies-btn');
 const genreSelect = document.getElementById('genre-select');
 const loadingIndicator = document.getElementById('loading');
 const viewFavoritesBtn = document.getElementById('view-favorites-btn');
+const viewRecentBtn = document.getElementById('view-recent-btn');
 const pageTitle = document.getElementById('page-title');
 
 // Emojis for poster placeholders
@@ -55,6 +56,19 @@ async function fetchMovies(mode = 'all') {
             return;
         }
         endpoint = `${API_BASE_URL}/favorites/${userId}`;
+    } else if (mode === 'recent') {
+        isViewingFavorites = false;
+        pageTitle.textContent = "⏱️ Recently Viewed";
+        if (!userId) {
+            movieGrid.innerHTML = `
+                <div style="text-align: center; grid-column: 1 / -1; padding: 40px; color: #aaa;">
+                    <h2>🔒 Please Sign In</h2>
+                    <p style="margin-top: 10px;">You must be signed in to view history.</p>
+                </div>`;
+            loadingIndicator.classList.add('hidden');
+            return;
+        }
+        endpoint = `${API_BASE_URL}/recent/${userId}`;
     } else {
         isViewingFavorites = false;
         const selectedGenre = genreSelect.value;
@@ -146,20 +160,46 @@ function renderMovies(movies) {
             </div>
         `;
         
+        // Add click listener to record view
+        card.addEventListener('click', () => {
+            recordView(movie.movieId);
+            // Visual feedback
+            card.style.opacity = '0.7';
+            setTimeout(() => card.style.opacity = '1', 200);
+        });
+        
         movieGrid.appendChild(card);
     });
 }
 
 // Event Listeners
 getMoviesBtn.addEventListener('click', () => fetchMovies('all'));
-genreSelect.addEventListener('change', () => {
-    // If they change genre, switch back to 'all' mode but filtered
-    fetchMovies('all');
-});
+genreSelect.addEventListener('change', () => fetchMovies('all'));
 viewFavoritesBtn.addEventListener('click', () => {
-    genreSelect.value = ""; // Reset genre filter visually
+    genreSelect.value = ""; 
     fetchMovies('favorites');
 });
+viewRecentBtn.addEventListener('click', () => {
+    genreSelect.value = ""; 
+    fetchMovies('recent');
+});
+
+// --- Recently Viewed Logic ---
+async function recordView(movieId) {
+    const userId = localStorage.getItem('movieUserId');
+    if (!userId) return; // Only track for logged-in users
+
+    try {
+        await fetch(`${API_BASE_URL}/viewed`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, movie_id: movieId })
+        });
+    } catch (e) {
+        console.error("Failed to record view", e);
+    }
+}
 
 // --- Favorites Logic ---
 async function toggleFavorite(event, movieId) {
@@ -244,6 +284,7 @@ function updateAuthUI() {
         authBtn.style.backgroundColor = 'var(--primary-color)';
         authBtn.style.color = 'white';
         viewFavoritesBtn.classList.remove('hidden');
+        viewRecentBtn.classList.remove('hidden');
         
         if (!document.getElementById('greeting')) {
             const greeting = document.createElement('div');
@@ -259,6 +300,7 @@ function updateAuthUI() {
         authBtn.style.backgroundColor = 'transparent';
         authBtn.style.color = 'var(--primary-color)';
         viewFavoritesBtn.classList.add('hidden');
+        viewRecentBtn.classList.add('hidden');
         if (document.getElementById('greeting')) {
             document.getElementById('greeting').remove();
         }

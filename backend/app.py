@@ -138,6 +138,15 @@ def init_db():
                     UNIQUE KEY unique_favorite (user_id, movie_id)
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_viewed (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    movie_id INT NOT NULL,
+                    viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_view (user_id, movie_id)
+                )
+            """)
             conn.commit()
         except Error as e:
             print(f"Error creating users table: {e}")
@@ -287,6 +296,65 @@ def get_favorites(user_id):
         cursor.execute(query, (user_id,))
         favorites = cursor.fetchall()
         return jsonify(favorites), 200
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/viewed', methods=['POST'])
+def add_viewed():
+    """Record that a user viewed a movie"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+
+    data = request.get_json()
+    if not data or not data.get('user_id') or not data.get('movie_id'):
+        return jsonify({'error': 'user_id and movie_id are required'}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor()
+    try:
+        # Insert new view, or update the timestamp if they already viewed it before
+        cursor.execute("""
+            INSERT INTO user_viewed (user_id, movie_id) 
+            VALUES (%s, %s) 
+            ON DUPLICATE KEY UPDATE viewed_at = CURRENT_TIMESTAMP
+        """, (data['user_id'], data['movie_id']))
+        conn.commit()
+        return jsonify({'success': True, 'message': 'View recorded'}), 201
+    except Error as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/recent/<int:user_id>', methods=['GET'])
+def get_recent(user_id):
+    """Get the last 10 recently viewed movies for a specific user"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+        
+    cursor = conn.cursor(dictionary=True)
+    try:
+        query = """
+            SELECT m.* 
+            FROM movies m
+            JOIN user_viewed uv ON m.movieId = uv.movie_id
+            WHERE uv.user_id = %s
+            ORDER BY uv.viewed_at DESC
+            LIMIT 10
+        """
+        cursor.execute(query, (user_id,))
+        recent = cursor.fetchall()
+        return jsonify(recent), 200
     except Error as e:
         return jsonify({'error': str(e)}), 500
     finally:

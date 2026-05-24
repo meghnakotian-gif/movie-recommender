@@ -112,6 +112,85 @@ def get_top_movies():
         cursor.close()
         conn.close()
 
+def init_db():
+    """Ensure the users table exists on startup"""
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(255) UNIQUE NOT NULL,
+                    password VARCHAR(255) NOT NULL
+                )
+            """)
+            conn.commit()
+        except Error as e:
+            print(f"Error creating users table: {e}")
+        finally:
+            if 'cursor' in locals():
+                cursor.close()
+            conn.close()
+
+# Run initialization
+init_db()
+
+@app.route('/register', methods=['POST'])
+def register():
+    """Register a new user (plain text password per requirements)"""
+    data = request.get_json()
+    if not data or not data.get('username') or not data.get('password'):
+        return jsonify({'success': False, 'error': 'Username and password are required'}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", 
+                       (data['username'], data['password']))
+        conn.commit()
+        return jsonify({'success': True, 'message': 'User registered successfully'}), 201
+    except Error as e:
+        if e.errno == 1062: # MySQL Duplicate Entry code
+            return jsonify({'success': False, 'error': 'Username already exists'}), 409
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/login', methods=['POST'])
+def login():
+    """Login an existing user"""
+    data = request.get_json()
+    if not data or not data.get('username') or not data.get('password'):
+        return jsonify({'success': False, 'error': 'Username and password are required'}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM users WHERE username = %s AND password = %s", 
+                       (data['username'], data['password']))
+        user = cursor.fetchone()
+        
+        if user:
+            return jsonify({
+                'success': True, 
+                'message': 'Login successful',
+                'username': user['username']
+            }), 200
+        else:
+            return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
+    except Error as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 if __name__ == '__main__':
     # Run the server on port 5000

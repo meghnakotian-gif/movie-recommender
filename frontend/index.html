@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netflix Clone - Movie Recommender</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="navbar">
+        <h1 class="logo">NETFLIX<span>CLONE</span></h1>
+        <div class="controls">
+            <select id="genre-select">
+                <option value="">All Genres</option>
+                <option value="Action">Action</option>
+                <option value="Comedy">Comedy</option>
+                <option value="Drama">Drama</option>
+                <option value="Fantasy">Fantasy</option>
+                <option value="Horror">Horror</option>
+                <option value="Romance">Romance</option>
+                <option value="Sci-Fi">Sci-Fi</option>
+                <option value="Thriller">Thriller</option>
+                <option value="Documentary">Documentary</option>
+            </select>
+            <button id="get-movies-btn">Get Movies</button>
+            <button id="auth-btn" class="auth-btn">Sign In</button>
+        </div>
+    </header>
+    
+    <main class="container">
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+            Loading movies...
+        </div>
+        <div id="movie-grid" class="movie-grid">
+            <!-- Movie cards will be dynamically injected here by JS -->
+        </div>
+    </main>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="modal hidden">
+        <div class="modal-content">
+            <span id="close-modal" class="close">&times;</span>
+            <h2 id="modal-title">Sign In</h2>
+            <form id="auth-form">
+                <input type="text" id="username" placeholder="Username" required>
+                <input type="password" id="password" placeholder="Password" required>
+                <div id="auth-error" class="auth-error hidden"></div>
+                <button type="submit" id="submit-auth-btn">Sign In</button>
+            </form>
+            <p class="toggle-auth">
+                <span id="toggle-auth-text">New to Netflix Clone?</span> 
+                <a href="#" id="toggle-auth-link">Sign up now.</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -112,6 +112,9 @@
                 if (data.success) {
                     // Save session and redirect to main app
                     localStorage.setItem('movieUser', data.username || username);
+                    if (data.user_id) {
+                        localStorage.setItem('movieUserId', data.user_id);
+                    }
                     window.location.href = 'index.html'; 
                 } else {
                     errorBox.textContent = data.error || 'Invalid credentials';

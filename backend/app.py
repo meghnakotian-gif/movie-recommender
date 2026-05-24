@@ -130,6 +130,14 @@ def init_db():
                     password VARCHAR(255) NOT NULL
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_favorites (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    movie_id INT NOT NULL,
+                    UNIQUE KEY unique_favorite (user_id, movie_id)
+                )
+            """)
             conn.commit()
         except Error as e:
             print(f"Error creating users table: {e}")
@@ -189,7 +197,8 @@ def login():
             return jsonify({
                 'success': True, 
                 'message': 'Login successful',
-                'username': user['username']
+                'username': user['username'],
+                'user_id': user['id']
             }), 200
         else:
             return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
@@ -204,6 +213,85 @@ def logout():
     """Clear the active user session"""
     session.pop('user', None)
     return jsonify({'success': True, 'message': 'Logged out successfully'}), 200
+
+@app.route('/favorite', methods=['POST'])
+def add_favorite():
+    """Add a movie to user's favorites"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+
+    data = request.get_json()
+    if not data or not data.get('user_id') or not data.get('movie_id'):
+        return jsonify({'error': 'user_id and movie_id are required'}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT IGNORE INTO user_favorites (user_id, movie_id) VALUES (%s, %s)", 
+                       (data['user_id'], data['movie_id']))
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Added to favorites'}), 201
+    except Error as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/favorite', methods=['DELETE'])
+def remove_favorite():
+    """Remove a movie from user's favorites"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+
+    data = request.get_json()
+    if not data or not data.get('user_id') or not data.get('movie_id'):
+        return jsonify({'error': 'user_id and movie_id are required'}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM user_favorites WHERE user_id = %s AND movie_id = %s", 
+                       (data['user_id'], data['movie_id']))
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Removed from favorites'}), 200
+    except Error as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/favorites/<int:user_id>', methods=['GET'])
+def get_favorites(user_id):
+    """Get all favorite movies for a specific user"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+        
+    cursor = conn.cursor(dictionary=True)
+    try:
+        query = """
+            SELECT m.* 
+            FROM movies m
+            JOIN user_favorites uf ON m.movieId = uf.movie_id
+            WHERE uf.user_id = %s
+        """
+        cursor.execute(query, (user_id,))
+        favorites = cursor.fetchall()
+        return jsonify(favorites), 200
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 if __name__ == '__main__':
     # Run the server on port 5000

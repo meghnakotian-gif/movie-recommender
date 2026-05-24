@@ -3,20 +3,67 @@ const movieGrid = document.getElementById('movie-grid');
 const getMoviesBtn = document.getElementById('get-movies-btn');
 const genreSelect = document.getElementById('genre-select');
 const loadingIndicator = document.getElementById('loading');
+const viewFavoritesBtn = document.getElementById('view-favorites-btn');
+const pageTitle = document.getElementById('page-title');
 
 // Emojis for poster placeholders
 const movieEmojis = ['🎬', '🍿', '🎥', '🎞️', '⭐', '🎭', '📽️', '📺'];
 
-async function fetchMovies() {
+let favoriteMovieIds = new Set();
+let isViewingFavorites = false;
+let currentUser = null;
+
+async function fetchUserFavoritesList() {
+    const userId = localStorage.getItem('movieUserId');
+    if (!userId) return;
+    try {
+        const res = await fetch(`${API_BASE_URL}/favorites/${userId}`, {credentials: 'include'});
+        const favs = await res.json();
+        favoriteMovieIds.clear();
+        if (Array.isArray(favs)) {
+            favs.forEach(f => favoriteMovieIds.add(f.movieId));
+        }
+    } catch (e) {
+        console.error("Failed to load favorites list");
+    }
+}
+
+async function fetchMovies(mode = 'all') {
     // Clear grid and show loading
     movieGrid.innerHTML = '';
     loadingIndicator.classList.remove('hidden');
 
-    const selectedGenre = genreSelect.value;
+    const userId = localStorage.getItem('movieUserId');
+    
+    // Sync the favorites set first so we know which hearts to fill
+    if (userId) {
+        await fetchUserFavoritesList();
+    }
+
     let endpoint = `${API_BASE_URL}/movies`;
     
-    if (selectedGenre) {
-        endpoint += `?genre=${selectedGenre}`;
+    if (mode === 'favorites') {
+        isViewingFavorites = true;
+        pageTitle.textContent = "❤️ My Favorites";
+        if (!userId) {
+            movieGrid.innerHTML = `
+                <div style="text-align: center; grid-column: 1 / -1; padding: 40px; color: #aaa;">
+                    <h2>🔒 Please Sign In</h2>
+                    <p style="margin-top: 10px;">You must be signed in to view your favorites.</p>
+                </div>`;
+            loadingIndicator.classList.add('hidden');
+            return;
+        }
+        endpoint = `${API_BASE_URL}/favorites/${userId}`;
+    } else {
+        isViewingFavorites = false;
+        const selectedGenre = genreSelect.value;
+        if (selectedGenre) {
+            endpoint += `?genre=${selectedGenre}`;
+            pageTitle.textContent = `${selectedGenre} Movies`;
+        } else {
+            pageTitle.textContent = "All Movies";
+        }
     }
 
     try {
@@ -61,7 +108,7 @@ function renderMovies(movies) {
         movieGrid.innerHTML = `
             <div style="text-align: center; grid-column: 1 / -1; padding: 40px; color: #aaa;">
                 <h2>No results found</h2>
-                <p>Try selecting a different genre.</p>
+                <p>We couldn't find any movies here.</p>
             </div>`;
         return;
     }
@@ -77,11 +124,17 @@ function renderMovies(movies) {
         const genresList = movie.genres ? movie.genres.split('|') : ['Unknown'];
         const genreTagsHtml = genresList.map(g => `<span class="genre-tag">${g}</span>`).join('');
         
-        // Use avg_rating if available (from /top), otherwise a placeholder or 'New'
+        // Use avg_rating if available, otherwise a placeholder
         const ratingText = movie.avg_rating ? `${movie.avg_rating} Rating` : '98% Match';
 
+        const isFav = favoriteMovieIds.has(movie.movieId);
+        const heartIcon = isFav ? '❤️' : '♡';
+
         card.innerHTML = `
-            <div class="movie-poster-placeholder">${randomEmoji}</div>
+            <div class="movie-poster-placeholder">
+                ${randomEmoji}
+                <button class="fav-btn" onclick="toggleFavorite(event, ${movie.movieId})" title="Toggle Favorite">${heartIcon}</button>
+            </div>
             <div class="movie-info">
                 <div>
                     <h3 class="movie-title">${movie.title}</h3>
@@ -98,22 +151,71 @@ function renderMovies(movies) {
 }
 
 // Event Listeners
-getMoviesBtn.addEventListener('click', fetchMovies);
-genreSelect.addEventListener('change', fetchMovies); 
+getMoviesBtn.addEventListener('click', () => fetchMovies('all'));
+genreSelect.addEventListener('change', () => {
+    // If they change genre, switch back to 'all' mode but filtered
+    fetchMovies('all');
+});
+viewFavoritesBtn.addEventListener('click', () => {
+    genreSelect.value = ""; // Reset genre filter visually
+    fetchMovies('favorites');
+});
+
+// --- Favorites Logic ---
+async function toggleFavorite(event, movieId) {
+    event.stopPropagation(); // Prevent card click if any
+    const userId = localStorage.getItem('movieUserId');
+    if (!userId) {
+        alert("Please sign in to add favorites!");
+        return;
+    }
+
+    const btn = event.target;
+    const isFav = favoriteMovieIds.has(movieId);
+    const method = isFav ? 'DELETE' : 'POST';
+
+    try {
+        btn.style.transform = "scale(1.2)";
+        
+        const res = await fetch(`${API_BASE_URL}/favorite`, {
+            method: method,
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, movie_id: movieId })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            if (isFav) {
+                // Successfully removed
+                favoriteMovieIds.delete(movieId);
+                btn.innerHTML = "♡";
+                // If we are currently on the Favorites page, remove the card dynamically
+                if (isViewingFavorites) {
+                    btn.closest('.movie-card').remove();
+                    // If grid is now empty, show empty message
+                    if (movieGrid.children.length === 0) {
+                        renderMovies([]);
+                    }
+                }
+            } else {
+                // Successfully added
+                favoriteMovieIds.add(movieId);
+                btn.innerHTML = "❤️";
+            }
+            setTimeout(() => { btn.style.transform = "scale(1)"; }, 200);
+        } else {
+            alert(data.error || "Failed to update favorite");
+            btn.style.transform = "scale(1)";
+        }
+    } catch (e) {
+        alert("Network error.");
+    }
+}
 
 // --- Auth Logic ---
 const authBtn = document.getElementById('auth-btn');
-const authModal = document.getElementById('auth-modal');
-const closeModal = document.getElementById('close-modal');
-const authForm = document.getElementById('auth-form');
-const toggleAuthLink = document.getElementById('toggle-auth-link');
-const toggleAuthText = document.getElementById('toggle-auth-text');
-const modalTitle = document.getElementById('modal-title');
-const submitAuthBtn = document.getElementById('submit-auth-btn');
-const authError = document.getElementById('auth-error');
-
-let isLoginMode = true;
-let currentUser = null;
 
 authBtn.addEventListener('click', async () => {
     if (currentUser) {
@@ -129,108 +231,19 @@ authBtn.addEventListener('click', async () => {
         
         currentUser = null;
         localStorage.removeItem('movieUser');
-        // Redirect to standalone login page after signing out
+        localStorage.removeItem('movieUserId');
         window.location.href = 'login.html'; 
     } else {
-        // Redirect to standalone login page to sign in
         window.location.href = 'login.html';
     }
 });
-
-closeModal.addEventListener('click', () => {
-    authModal.classList.add('hidden');
-    authError.classList.add('hidden');
-    authForm.reset();
-});
-
-toggleAuthLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    isLoginMode = !isLoginMode;
-    authError.classList.add('hidden');
-    
-    if (isLoginMode) {
-        modalTitle.textContent = 'Sign In';
-        submitAuthBtn.textContent = 'Sign In';
-        toggleAuthText.textContent = 'New to Netflix Clone?';
-        toggleAuthLink.textContent = 'Sign up now.';
-    } else {
-        modalTitle.textContent = 'Sign Up';
-        submitAuthBtn.textContent = 'Sign Up';
-        toggleAuthText.textContent = 'Already have an account?';
-        toggleAuthLink.textContent = 'Sign in.';
-    }
-});
-
-// Handle Auth Form Submit
-authForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    
-    authError.classList.add('hidden');
-    submitAuthBtn.disabled = true;
-    submitAuthBtn.textContent = 'Please wait...';
-
-    const endpoint = isLoginMode ? '/login' : '/register';
-    
-    try {
-        const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        
-        const data = await res.json();
-        
-        if (data.success) {
-            if (isLoginMode) {
-                // Successful Login
-                currentUser = data.username || username;
-                localStorage.setItem('movieUser', currentUser);
-                updateAuthUI();
-                authModal.classList.add('hidden');
-                authForm.reset();
-            } else {
-                // Successful Register -> Auto switch to Login
-                isLoginMode = true;
-                modalTitle.textContent = 'Sign In';
-                submitAuthBtn.textContent = 'Sign In';
-                toggleAuthText.textContent = 'New to Netflix Clone?';
-                toggleAuthLink.textContent = 'Sign up now.';
-                
-                authError.textContent = 'Registration successful! Please sign in.';
-                authError.style.color = '#46d369';
-                authError.style.background = 'rgba(70, 211, 105, 0.1)';
-                authError.classList.remove('hidden');
-                document.getElementById('password').value = ''; // clear password
-            }
-        } else {
-            showError(data.error || 'Authentication failed');
-        }
-    } catch (err) {
-        showError('Network error. Backend might be down.');
-    } finally {
-        submitAuthBtn.disabled = false;
-        if (!isLoginMode && document.getElementById('password').value === '') {
-            submitAuthBtn.textContent = 'Sign In'; 
-        } else {
-            submitAuthBtn.textContent = isLoginMode ? 'Sign In' : 'Sign Up';
-        }
-    }
-});
-
-function showError(msg) {
-    authError.textContent = msg;
-    authError.style.color = 'var(--primary-color)';
-    authError.style.background = 'rgba(229, 9, 20, 0.1)';
-    authError.classList.remove('hidden');
-}
 
 function updateAuthUI() {
     if (currentUser) {
         authBtn.textContent = 'Sign Out';
         authBtn.style.backgroundColor = 'var(--primary-color)';
         authBtn.style.color = 'white';
+        viewFavoritesBtn.classList.remove('hidden');
         
         if (!document.getElementById('greeting')) {
             const greeting = document.createElement('div');
@@ -245,6 +258,7 @@ function updateAuthUI() {
         authBtn.textContent = 'Sign In';
         authBtn.style.backgroundColor = 'transparent';
         authBtn.style.color = 'var(--primary-color)';
+        viewFavoritesBtn.classList.add('hidden');
         if (document.getElementById('greeting')) {
             document.getElementById('greeting').remove();
         }
@@ -253,10 +267,10 @@ function updateAuthUI() {
 
 // Initialization on load
 document.addEventListener('DOMContentLoaded', () => {
-    fetchMovies();
     const savedUser = localStorage.getItem('movieUser');
     if (savedUser) {
         currentUser = savedUser;
         updateAuthUI();
     }
+    fetchMovies('all');
 });

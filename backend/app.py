@@ -1,11 +1,13 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 import mysql.connector
 from mysql.connector import Error
+import os
 
 app = Flask(__name__)
-# Enable CORS for frontend integration
-CORS(app) 
+app.secret_key = os.urandom(24) # Generate a random secret key for sessions
+# Enable CORS for frontend integration with credentials support
+CORS(app, supports_credentials=True)
 
 # Database Configuration
 DB_CONFIG = {
@@ -41,7 +43,10 @@ def get_movies():
     """
     1. GET /movies -> all movies (limited to 100 to prevent massive payloads)
     2. GET /movies?genre=Action -> filter by genre
+    Protected Route: Requires active session
     """
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized. Please log in.'}), 401
     conn = get_db_connection()
     if not conn:
         return jsonify({'error': 'Failed to connect to database'}), 500
@@ -179,6 +184,8 @@ def login():
         user = cursor.fetchone()
         
         if user:
+            # Store username in session
+            session['user'] = user['username']
             return jsonify({
                 'success': True, 
                 'message': 'Login successful',
@@ -191,6 +198,12 @@ def login():
     finally:
         cursor.close()
         conn.close()
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    """Clear the active user session"""
+    session.pop('user', None)
+    return jsonify({'success': True, 'message': 'Logged out successfully'}), 200
 
 if __name__ == '__main__':
     # Run the server on port 5000

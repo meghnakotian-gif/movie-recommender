@@ -23,11 +23,21 @@ async function fetchMovies() {
         const response = await fetch(endpoint, {
             method: 'GET',
             mode: 'cors',
+            credentials: 'include',
             headers: {
                 'Accept': 'application/json'
             }
         });
         
+        if (response.status === 401) {
+            movieGrid.innerHTML = `
+                <div style="text-align: center; grid-column: 1 / -1; padding: 40px; color: #aaa;">
+                    <h2>🔒 Members Only</h2>
+                    <p style="margin-top: 10px;">You must be signed in to view our movie collection.</p>
+                </div>`;
+            return;
+        }
+
         if (!response.ok) {
             throw new Error(`API Error: ${response.status}`);
         }
@@ -105,9 +115,18 @@ const authError = document.getElementById('auth-error');
 let isLoginMode = true;
 let currentUser = null;
 
-authBtn.addEventListener('click', () => {
+authBtn.addEventListener('click', async () => {
     if (currentUser) {
-        // Sign Out
+        // Sign Out from Backend
+        try {
+            await fetch(`${API_BASE_URL}/logout`, { 
+                method: 'POST',
+                credentials: 'include'
+            });
+        } catch (e) {
+            console.error('Logout error', e);
+        }
+        
         currentUser = null;
         localStorage.removeItem('movieUser');
         // Redirect to standalone login page after signing out

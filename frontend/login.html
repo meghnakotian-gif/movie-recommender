@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Netflix Clone</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #141414;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .auth-container {
+            background-color: rgba(0, 0, 0, 0.75);
+            padding: 60px 68px 40px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 450px;
+        }
+        h2 { margin-bottom: 28px; font-size: 32px; font-weight: 600; }
+        .input-group { margin-bottom: 16px; }
+        input {
+            width: 100%;
+            padding: 16px 20px;
+            border-radius: 4px;
+            border: none;
+            background-color: #333;
+            color: white;
+            font-size: 16px;
+        }
+        input:focus { outline: 2px solid #e50914; background-color: #444; }
+        button {
+            width: 100%;
+            padding: 16px;
+            background-color: #e50914;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 24px;
+            transition: 0.2s ease;
+        }
+        button:hover { background-color: #f40612; }
+        .error-msg {
+            color: #e50914;
+            background: rgba(229, 9, 20, 0.1);
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            display: none;
+        }
+        .toggle-text {
+            color: #737373;
+            margin-top: 16px;
+            font-size: 16px;
+        }
+        .toggle-text a { color: white; text-decoration: none; }
+        .toggle-text a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h2>Sign In</h2>
+        <div id="error-box" class="error-msg"></div>
+        <form id="login-form">
+            <div class="input-group">
+                <input type="text" id="username" placeholder="Username" required>
+            </div>
+            <div class="input-group">
+                <input type="password" id="password" placeholder="Password" required>
+            </div>
+            <button type="submit" id="submit-btn">Sign In</button>
+        </form>
+        <div class="toggle-text">
+            New to Netflix Clone? <a href="register.html">Sign up now.</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:5000';
+        const form = document.getElementById('login-form');
+        const errorBox = document.getElementById('error-box');
+        const submitBtn = document.getElementById('submit-btn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            errorBox.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Signing in...';
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    // Save session and redirect to main app
+                    localStorage.setItem('movieUser', data.username || username);
+                    window.location.href = 'index.html'; 
+                } else {
+                    errorBox.textContent = data.error || 'Invalid credentials';
+                    errorBox.style.display = 'block';
+                }
+            } catch (err) {
+                errorBox.textContent = 'Network error. Make sure Flask backend is running on port 5000.';
+                errorBox.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Sign In';
+            }
+        });
+    </script>
+</body>
+</html>

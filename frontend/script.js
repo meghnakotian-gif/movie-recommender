@@ -105,15 +105,16 @@ const authError = document.getElementById('auth-error');
 let isLoginMode = true;
 let currentUser = null;
 
-// Modal Toggles
 authBtn.addEventListener('click', () => {
     if (currentUser) {
         // Sign Out
         currentUser = null;
         localStorage.removeItem('movieUser');
-        updateAuthUI();
+        // Redirect to standalone login page after signing out
+        window.location.href = 'login.html'; 
     } else {
-        authModal.classList.remove('hidden');
+        // Redirect to standalone login page to sign in
+        window.location.href = 'login.html';
     }
 });
 

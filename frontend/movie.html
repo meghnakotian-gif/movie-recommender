@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Details - Netflix Clone</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .hero {
+            position: relative;
+            height: 70vh;
+            display: flex;
+            align-items: center;
+            padding: 0 50px;
+            background: linear-gradient(135deg, #1f1f1f 0%, #000000 100%);
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to right, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0) 100%);
+            z-index: 1;
+        }
+
+        .hero-backdrop-icon {
+            position: absolute;
+            right: -10%;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 45vw;
+            opacity: 0.1;
+            z-index: 0;
+            user-select: none;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 600px;
+        }
+
+        .movie-title-large {
+            font-size: 4.5rem;
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .movie-meta {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 1.1rem;
+            color: #bcbcbc;
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+
+        .meta-year {
+            color: white;
+        }
+
+        .meta-rating {
+            color: #46d369;
+            border: 1px solid rgba(70, 211, 105, 0.4);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .meta-director {
+            color: #aaa;
+        }
+
+        .movie-description {
+            font-size: 1.2rem;
+            line-height: 1.6;
+            color: #e5e5e5;
+            margin-bottom: 30px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn-play {
+            background-color: white;
+            color: black;
+            font-size: 1.2rem;
+            padding: 12px 35px;
+            border-radius: 4px;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+        }
+        
+        .btn-play:hover {
+            background-color: #d8d8d8;
+        }
+
+        .btn-back {
+            background-color: rgba(109, 109, 110, 0.7);
+            color: white;
+            font-size: 1.2rem;
+            padding: 12px 35px;
+            border-radius: 4px;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-back:hover {
+            background-color: rgba(109, 109, 110, 0.9);
+        }
+
+        /* Loading State */
+        .full-page-loader {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="navbar">
+        <h1 class="logo" style="cursor: pointer;" onclick="window.location.href='index.html'">NETFLIX<span>CLONE</span></h1>
+        <div class="controls">
+            <button id="auth-btn" class="auth-btn hidden">Sign Out</button>
+        </div>
+    </header>
+
+    <div id="loader" class="full-page-loader">
+        <div class="spinner"></div>
+        <p style="margin-top:20px;">Loading Movie...</p>
+    </div>
+
+    <div id="movie-container" class="hidden">
+        <section class="hero">
+            <div id="hero-bg" class="hero-backdrop-icon">🎬</div>
+            <div class="hero-content">
+                <h1 id="detail-title" class="movie-title-large"></h1>
+                <div class="movie-meta">
+                    <span id="detail-rating" class="meta-rating"></span>
+                    <span id="detail-year" class="meta-year"></span>
+                    <span id="detail-director" class="meta-director"></span>
+                </div>
+                <div id="detail-genres" class="movie-genres" style="margin-bottom: 20px;"></div>
+                <p class="movie-description">
+                    A captivating cinematic experience that you won't want to miss. Dive into the world of this acclaimed masterpiece.
+                </p>
+                <div class="btn-group">
+                    <button class="btn-play">▶ Play</button>
+                    <button class="btn-back" onclick="window.history.back()">Back</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:5000';
+        const emojis = ['🎬', '🍿', '🎥', '🎞️', '⭐', '🎭', '📽️', '📺'];
+
+        // Auth Logic
+        const userId = localStorage.getItem('movieUserId');
+        if (!userId) {
+            window.location.href = 'login.html'; // Protect page
+        } else {
+            const authBtn = document.getElementById('auth-btn');
+            authBtn.classList.remove('hidden');
+            authBtn.addEventListener('click', async () => {
+                try {
+                    await fetch(`${API_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
+                } catch (e) {}
+                localStorage.removeItem('movieUser');
+                localStorage.removeItem('movieUserId');
+                window.location.href = 'login.html';
+            });
+        }
+
+        async function fetchMovieDetails() {
+            // Get movie ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const movieId = urlParams.get('id');
+
+            if (!movieId) {
+                document.getElementById('loader').innerHTML = '<h2>Error: No movie specified.</h2><button class="btn-back" onclick="window.history.back()" style="margin-top:20px">Go Back</button>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/movie/${movieId}`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (res.status === 401) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || 'Movie not found');
+                }
+                const movie = await res.json();
+                
+                // Parse Title & Year
+                let title = movie.title;
+                let year = 'Unknown Year';
+                const yearMatch = title.match(/(.*)\s\((\d{4})\)$/);
+                if (yearMatch) {
+                    title = yearMatch[1];
+                    year = yearMatch[2];
+                }
+
+                // Parse Director (Mock data since DB doesn't have it)
+                const mockDirectors = ['Christopher Nolan', 'Steven Spielberg', 'Martin Scorsese', 'Quentin Tarantino', 'Greta Gerwig', 'Jordan Peele', 'Bong Joon-ho'];
+                const director = mockDirectors[movie.movieId % mockDirectors.length];
+
+                // Rating
+                const rating = movie.avg_rating ? `★ ${movie.avg_rating}` : '98% Match';
+
+                // Genres
+                const genresList = movie.genres ? movie.genres.split('|') : ['Unknown'];
+                const genreHtml = genresList.map(g => `<span class="genre-tag">${g}</span>`).join('');
+
+                // Update DOM
+                document.getElementById('detail-title').textContent = title;
+                document.getElementById('detail-year').textContent = year;
+                document.getElementById('detail-director').textContent = `Dir. ${director}`;
+                document.getElementById('detail-rating').textContent = rating;
+                document.getElementById('detail-genres').innerHTML = genreHtml;
+                document.getElementById('hero-bg').textContent = emojis[movie.movieId % emojis.length];
+
+                // Show Content
+                document.getElementById('loader').classList.add('hidden');
+                document.getElementById('movie-container').classList.remove('hidden');
+
+            } catch (e) {
+                document.getElementById('loader').innerHTML = `<h2>Error: ${e.message}</h2><button class="btn-back" onclick="window.history.back()" style="margin-top:20px">Go Back</button>`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchMovieDetails);
+    </script>
+</body>
+</html>

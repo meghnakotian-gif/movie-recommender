@@ -392,6 +392,33 @@ def get_movie_details(movie_id):
         cursor.close()
         conn.close()
 
+@app.route('/search', methods=['GET'])
+def search_movies():
+    """Search for movies by title"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+
+    query = request.args.get('query')
+    if not query:
+        return jsonify([]), 200
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    cursor = conn.cursor(dictionary=True)
+    try:
+        sql = "SELECT * FROM movies WHERE title LIKE %s LIMIT 100"
+        search_pattern = f"%{query}%"
+        cursor.execute(sql, (search_pattern,))
+        movies = cursor.fetchall()
+        return jsonify(movies), 200
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 if __name__ == '__main__':
     # Run the server on port 5000
     app.run(debug=True, port=5000)

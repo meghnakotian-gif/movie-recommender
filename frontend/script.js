@@ -29,7 +29,37 @@ async function fetchUserFavoritesList() {
     }
 }
 
-async function fetchMovies(mode = 'all') {
+async function searchMovies() {
+    const searchInput = document.getElementById('search');
+    const query = searchInput.value.trim();
+    if (query) {
+        genreSelect.value = ""; // Reset genre filter
+        fetchMovies('search', query);
+    } else {
+        fetchMovies('all');
+    }
+}
+
+// Allow Enter key in search box
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('search');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                searchMovies();
+            }
+        });
+    }
+    
+    const savedUser = localStorage.getItem('movieUser');
+    if (savedUser) {
+        currentUser = savedUser;
+        updateAuthUI();
+    }
+    fetchMovies('all');
+});
+
+async function fetchMovies(mode = 'all', searchQuery = null) {
     // Clear grid and show loading
     movieGrid.innerHTML = '';
     loadingIndicator.classList.remove('hidden');
@@ -69,6 +99,10 @@ async function fetchMovies(mode = 'all') {
             return;
         }
         endpoint = `${API_BASE_URL}/recent/${userId}`;
+    } else if (mode === 'search' && searchQuery) {
+        isViewingFavorites = false;
+        endpoint = `${API_BASE_URL}/search?query=${encodeURIComponent(searchQuery)}`;
+        pageTitle.textContent = `Search Results for "${searchQuery}"`;
     } else {
         isViewingFavorites = false;
         const selectedGenre = genreSelect.value;
@@ -160,12 +194,11 @@ function renderMovies(movies) {
             </div>
         `;
         
-        // Add click listener to record view
-        card.addEventListener('click', () => {
-            recordView(movie.movieId);
-            // Visual feedback
+        // Add click listener to record view and navigate
+        card.addEventListener('click', async () => {
             card.style.opacity = '0.7';
-            setTimeout(() => card.style.opacity = '1', 200);
+            await recordView(movie.movieId);
+            window.location.href = `movie.html?id=${movie.movieId}`;
         });
         
         movieGrid.appendChild(card);
@@ -307,12 +340,4 @@ function updateAuthUI() {
     }
 }
 
-// Initialization on load
-document.addEventListener('DOMContentLoaded', () => {
-    const savedUser = localStorage.getItem('movieUser');
-    if (savedUser) {
-        currentUser = savedUser;
-        updateAuthUI();
-    }
-    fetchMovies('all');
-});
+// Initialization is now in DOMContentLoaded near searchMovies

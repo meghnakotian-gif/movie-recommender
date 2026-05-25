@@ -361,6 +361,37 @@ def get_recent(user_id):
         cursor.close()
         conn.close()
 
+@app.route('/movie/<int:movie_id>', methods=['GET'])
+def get_movie_details(movie_id):
+    """Get detailed information for a single movie"""
+    if 'user' not in session:
+        return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+        
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # Get movie details
+        query = """
+            SELECT m.*
+            FROM movies m
+            WHERE m.movieId = %s
+        """
+        cursor.execute(query, (movie_id,))
+        movie = cursor.fetchone()
+        
+        if not movie:
+            return jsonify({'error': 'Movie not found'}), 404
+            
+        return jsonify(movie), 200
+    except Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 if __name__ == '__main__':
     # Run the server on port 5000
     app.run(debug=True, port=5000)
